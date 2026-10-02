@@ -1,0 +1,91 @@
+name: Linux Flatpak
+
+on:
+  push:
+    paths:
+      - '.github/workflows/linux-flatpak.yml'
+      - 'linux/**'
+      - 'lipflow/**'
+      - 'espnet/**'
+      - 'LICENSE'
+      - 'NOTICE'
+  pull_request:
+    paths:
+      - '.github/workflows/linux-flatpak.yml'
+      - 'linux/**'
+      - 'lipflow/**'
+      - 'espnet/**'
+      - 'LICENSE'
+      - 'NOTICE'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flatpak-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Make room for the CUDA libraries and GNOME SDK
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup
+          df -h "$RUNNER_TEMP"
+
+      - name: Install build tools and configure Flathub
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y flatpak flatpak-builder xvfb xauth dbus-x11
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+
+      - name: Build GNOME 50 Flatpak with CUDA and CPU fallback
+        run: |
+          flatpak-builder --user --arch=x86_64 --install-deps-from=flathub \
+            --force-clean --disable-rofiles-fuse \
+            --state-dir="$RUNNER_TEMP/lipflow-state" \
+            --repo="$RUNNER_TEMP/lipflow-repo" \
+            "$RUNNER_TEMP/lipflow-build" linux/flatpak/io.github.develop7.Lipflow.json
+          # The exported repository is sufficient for bundling; free the duplicate files.
+          rm -rf "$RUNNER_TEMP/lipflow-state" "$RUNNER_TEMP/lipflow-build"
+
+      - name: Bundle and checksum
+        run: |
+          mkdir -p "$RUNNER_TEMP/lipflow-dist"
+          flatpak build-bundle --arch=x86_64 \
+            --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+            "$RUNNER_TEMP/lipflow-repo" "$RUNNER_TEMP/lipflow-dist/Lipflow.flatpak" \
+            io.github.develop7.Lipflow
+          rm -rf "$RUNNER_TEMP/lipflow-repo"
+          cd "$RUNNER_TEMP/lipflow-dist"
+          sha256sum Lipflow.flatpak > Lipflow.flatpak.sha256
+          sha256sum -c Lipflow.flatpak.sha256
+
+      - name: Install bundle and smoke-test the packaged application
+        run: |
+          flatpak install --user --noninteractive "$RUNNER_TEMP/lipflow-dist/Lipflow.flatpak"
+          timeout 120s dbus-run-session -- flatpak run --user io.github.develop7.Lipflow doctor
+          timeout 120s dbus-run-session -- xvfb-run -a \
+            flatpak run --user --socket=x11 --env=GTK_A11Y=none \
+            io.github.develop7.Lipflow run --smoke-test
+
+      - name: Upload installable bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lipflow-linux-x86_64-cuda
+          path: |
+            ${{ runner.temp }}/lipflow-dist/Lipflow.flatpak
+            ${{ runner.temp }}/lipflow-dist/Lipflow.flatpak.sha256
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error

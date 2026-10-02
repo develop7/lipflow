@@ -3,7 +3,7 @@
 **Wispr Flow for your lips.** Hold a key, silently mouth what you want to say, let go, and the
 text shows up at your cursor in whatever app you're in. No microphone and no sound, just your webcam.
 
-Everything runs locally on your Mac or Windows PC. An optional LLM pass fixes the words lip reading gets wrong.
+Everything runs locally on your Mac, Windows PC, or Linux machine. An optional LLM pass fixes the words lip reading gets wrong.
 
 ```
  hold ⌥ (right)  ──►  webcam  ──►  face landmarks (live)  ──►  mouth crops, 25 fps
@@ -76,6 +76,34 @@ How it differs from the Mac version:
   around your cursor). Learning from your corrections is Mac-only for now.
 - **Start with Windows:** tray menu → *Start with Windows*. Your data lives in `%APPDATA%\Lipflow`
   (log: `Lipflow.log` there). `uv run lipflow doctor` checks the models and camera.
+
+### Linux / GNOME 50
+
+The Linux frontend is written in Rust with GTK4/libadwaita and reuses the existing Python ML
+engine. It targets **GNOME 50 on Wayland**, including openSUSE Tumbleweed with NVIDIA GPUs.
+It includes dictation, portal-approved automatic paste, whisper mode, practice and training,
+custom words, phrase import, history, notifications, and autostart.
+
+Download the CUDA-enabled Flatpak (x86_64, with CPU fallback) from a successful
+**Actions → Linux Flatpak** run's **Lipflow-linux-x86_64-cuda** artifact. See the
+[installation instructions](linux/README.md#flatpak). To build locally:
+
+```sh
+flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak-builder --user --install-deps-from=flathub --force-clean --install \
+  linux/flatpak/build linux/flatpak/io.github.develop7.Lipflow.json
+flatpak run io.github.develop7.Lipflow
+```
+
+In **Preferences**, connect desktop permissions, then download/load the models from **Dictate**.
+Hold **Ctrl+Alt+Space**, mouth your words, and release. Double-tap for hands-free; **Ctrl+Alt+Esc**
+cancels. GNOME's portal settings can change those shortcuts. Automatic paste needs keyboard and
+clipboard consent; the window hides while dictating so the receiving app can retain focus.
+
+See [Linux build, development, and verification instructions](linux/README.md), including
+NVIDIA setup, data locations, and the remaining checks on a real GNOME desktop. Linux uses a
+native window and notifications; automatic learning from edits inside other apps remains a
+macOS feature. The research-only model weights download separately.
 
 ### Most accurate: whisper mode
 

@@ -4,3 +4,10 @@ __pycache__/
 models/
 samples/
 .pytest_cache/
+linux/target/
+.flatpak-builder/
+linux/flatpak/build/
+linux/flatpak/repo/
+linux/flatpak/*.flatpak
+linux/flatpak/*.flatpak.sha256
+linux/flatpak/generated/
