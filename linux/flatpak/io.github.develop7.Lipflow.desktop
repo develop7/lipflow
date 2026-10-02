@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Lipflow
+Comment=Silent dictation from your webcam
+Exec=lipflow run
+Icon=io.github.develop7.Lipflow
+Terminal=false
+Categories=Utility;Accessibility;
+Keywords=dictation;speech;lip;reading;
+StartupNotify=true
+DBusActivatable=false

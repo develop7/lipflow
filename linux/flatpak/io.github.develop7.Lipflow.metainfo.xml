@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.develop7.Lipflow</id>
+  <name>Lipflow</name>
+  <summary>Silent dictation from your webcam</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <launchable type="desktop-id">io.github.develop7.Lipflow.desktop</launchable>
+  <developer id="io.github.develop7"><name>Lipflow contributors</name></developer>
+  <description>
+    <p>Mouth your words, then paste them at the cursor. Lipflow reads lips on your computer, with optional audio for whisper mode.</p>
+    <p>Practice sentences, train on your face, add custom words, and revisit your dictation history. GNOME asks for camera, shortcut, background, and keyboard permission.</p>
+    <p>The speech recognition weights download separately and are restricted to research use. Optional Claude cleanup sends candidate text to Anthropic; offline cleanup is available.</p>
+  </description>
+  <url type="homepage">https://github.com/develop7/lipflow</url>
+  <url type="bugtracker">https://github.com/develop7/lipflow/issues</url>
+  <content_rating type="oars-1.1"/>
+  <releases><release version="0.1.0" date="2026-10-02"/></releases>
+</component>

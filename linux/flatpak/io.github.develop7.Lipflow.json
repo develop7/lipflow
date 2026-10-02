@@ -1,0 +1,72 @@
+{
+  "app-id": "io.github.develop7.Lipflow",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "50",
+  "sdk": "org.gnome.Sdk",
+  "sdk-extensions": ["org.freedesktop.Sdk.Extension.rust-stable"],
+  "command": "lipflow",
+  "build-options": {
+    "append-path": "/usr/lib/sdk/rust-stable/bin",
+    "env": {
+      "PYO3_PYTHON": "/app/bin/python3.12",
+      "CARGO_NET_OFFLINE": "true"
+    }
+  },
+  "finish-args": [
+    "--socket=wayland",
+    "--socket=fallback-x11",
+    "--share=ipc",
+    "--socket=pulseaudio",
+    "--share=network",
+    "--device=dri",
+    "--env=LIPFLOW_ENGINE_ROOT=/app/share/lipflow/engine"
+  ],
+  "modules": [
+    {
+      "name": "python312",
+      "buildsystem": "autotools",
+      "config-opts": ["--enable-shared", "--with-ensurepip=install"],
+      "sources": [{
+        "type": "archive",
+        "url": "https://github.com/python/cpython/archive/refs/tags/v3.12.14.tar.gz",
+        "sha256": "5b8f5847fc28eea401f7415dc367b8365485ee97f068cd1a0cee124a096bb171"
+      }]
+    },
+    {
+      "name": "portaudio",
+      "buildsystem": "autotools",
+      "config-opts": ["--disable-static"],
+      "sources": [{
+        "type": "archive",
+        "url": "https://github.com/PortAudio/portaudio/archive/refs/tags/v19.7.0.tar.gz",
+        "sha256": "5af29ba58bbdbb7bbcefaaecc77ec8fc413f0db6f4c4e286c40c3e1b83174fa0"
+      }]
+    },
+    "python-deps.json",
+    {
+      "name": "lipflow",
+      "buildsystem": "simple",
+      "build-commands": [
+        "mkdir -p .cargo",
+        "printf '[source.crates-io]\nreplace-with = \"vendored-sources\"\n[source.vendored-sources]\ndirectory = \"vendor\"\n' > .cargo/config.toml",
+        "cargo build --release --locked --offline",
+        "install -Dm755 target/release/lipflow /app/bin/lipflow",
+        "mkdir -p /app/share/lipflow/engine",
+        "cp -a engine/lipflow engine/espnet /app/share/lipflow/engine/",
+        "install -Dm644 flatpak/io.github.develop7.Lipflow.desktop /app/share/applications/io.github.develop7.Lipflow.desktop",
+        "install -Dm644 flatpak/io.github.develop7.Lipflow.metainfo.xml /app/share/metainfo/io.github.develop7.Lipflow.metainfo.xml",
+        "install -Dm644 flatpak/io.github.develop7.Lipflow.svg /app/share/icons/hicolor/scalable/apps/io.github.develop7.Lipflow.svg",
+        "install -Dm644 engine/LICENSE /app/share/licenses/lipflow/LICENSE",
+        "install -Dm644 engine/NOTICE /app/share/licenses/lipflow/NOTICE"
+      ],
+      "sources": [
+        {"type":"dir", "path":"..", "skip":["target", "flatpak/generated", "flatpak/build", "flatpak/repo", "flatpak/Lipflow.flatpak", "flatpak/Lipflow.flatpak.sha256"]},
+        "cargo-sources.json",
+        {"type":"dir", "path":"../../lipflow", "dest":"engine/lipflow", "skip":["__pycache__"]},
+        {"type":"dir", "path":"../../espnet", "dest":"engine/espnet", "skip":["__pycache__"]},
+        {"type":"file", "path":"../../LICENSE", "dest":"engine"},
+        {"type":"file", "path":"../../NOTICE", "dest":"engine"}
+      ]
+    }
+  ]
+}
