@@ -35,8 +35,9 @@ The bundle points to Flathub for the GNOME runtime. The adjacent
 The verified x86_64 bundle is about 2.8 GiB. The installed application uses about 6.9 GB,
 plus the shared GNOME/NVIDIA runtimes and downloaded speech models.
 
-Install Flatpak and flatpak-builder with your distribution's package manager. Build from the
-repository root:
+Install Flatpak, flatpak-builder, and elfutils with your distribution's package manager.
+Flatpak Builder uses elfutils (`eu-strip` and `eu-elfcompress`) to process debug symbols.
+Build from the repository root:
 
 ```sh
 flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
