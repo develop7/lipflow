@@ -37,6 +37,7 @@ plus the shared GNOME/NVIDIA runtimes and downloaded speech models.
 
 Install Flatpak, flatpak-builder, and elfutils with your distribution's package manager.
 Flatpak Builder uses elfutils (`eu-strip` and `eu-elfcompress`) to process debug symbols.
+AppStream composition also needs an SVG image loader (on Ubuntu, `librsvg2-common`).
 Build from the repository root:
 
 ```sh
