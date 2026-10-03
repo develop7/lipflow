@@ -60,6 +60,8 @@ fn compatible(filename: &str) -> bool {
     });
     platform_ok && python_ok && ["none", "abi3", "cp312"].contains(&abi)
 }
+// Defer the GPU-enabled PyTorch stack and its NVIDIA/CUDA support packages as
+// one install-time payload; ordinary Python dependencies stay in the build.
 fn deferred(name: &str) -> bool {
     name == "torch" || name == "triton" || name.starts_with("nvidia-") || name.starts_with("cuda-")
 }
