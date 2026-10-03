@@ -100,7 +100,6 @@ pub fn generate(root: &Path) -> Result<()> {
     .collect();
     let client = crate::models::client()?;
     let mut sources = Vec::new();
-    let mut requirements = Vec::new();
     for package in installed
         .iter()
         .filter(|p| !excluded.contains(p.name.as_str()))
@@ -179,8 +178,8 @@ pub fn generate(root: &Path) -> Result<()> {
         } else {
             sources.push(json!({"type":"file", "url":url, "sha256":hash, "dest":"wheels", "dest-filename":filename}));
         }
-        requirements.push(format!("{}=={}", package.name, package.version));
     }
+    let source_count = sources.len();
     let flatpak = root.join("linux/flatpak");
     let module = json!({"name":"python-ml-dependencies", "buildsystem":"simple", "build-options":{"no-debuginfo":true}, "build-commands":[
         "for wheel in wheels/*.whl; do /app/bin/python3.12 -m pip install --no-index --no-deps --no-compile \"$wheel\" || exit; rm \"$wheel\"; done"
@@ -209,7 +208,7 @@ pub fn generate(root: &Path) -> Result<()> {
     )?;
     println!(
         "Generated {} hashed wheel sources and Cargo.lock archive sources in {}",
-        requirements.len(),
+        source_count,
         flatpak.display()
     );
     Ok(())
