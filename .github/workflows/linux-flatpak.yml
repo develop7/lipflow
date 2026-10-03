@@ -46,7 +46,7 @@ jobs:
       - name: Install build tools and configure Flathub
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y flatpak flatpak-builder xvfb xauth dbus-x11
+          sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils xvfb xauth dbus-x11
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
       - name: Build GNOME 50 Flatpak with CUDA and CPU fallback
