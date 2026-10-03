@@ -51,6 +51,9 @@
         "printf '[source.crates-io]\nreplace-with = \"vendored-sources\"\n[source.vendored-sources]\ndirectory = \"vendor\"\n' > .cargo/config.toml",
         "cargo build --release --locked --offline",
         "install -Dm755 target/release/lipflow /app/bin/lipflow",
+        "install -Dm755 flatpak/apply_extra /app/bin/apply_extra",
+        "mkdir -p /app/lib/python3.12/site-packages",
+        "printf \"/app/extra/lib/python3.12/site-packages\\n\" > /app/lib/python3.12/site-packages/lipflow-extra.pth",
         "mkdir -p /app/share/lipflow/engine",
         "cp -a engine/lipflow engine/espnet /app/share/lipflow/engine/",
         "install -Dm644 flatpak/io.github.develop7.Lipflow.desktop /app/share/applications/io.github.develop7.Lipflow.desktop",
@@ -60,7 +63,7 @@
         "install -Dm644 engine/NOTICE /app/share/licenses/lipflow/NOTICE"
       ],
       "sources": [
-        {"type":"dir", "path":"..", "skip":["target", "flatpak/generated", "flatpak/build", "flatpak/repo", "flatpak/Lipflow.flatpak", "flatpak/Lipflow.flatpak.sha256"]},
+        {"type":"dir", "path":"..", "skip":["target", "flatpak/generated", "flatpak/build", "flatpak/lipflow-repo", "flatpak/Lipflow-repo.tar.gz", "flatpak/Lipflow-repo.tar.gz.sha256"]},
         "cargo-sources.json",
         {"type":"dir", "path":"../../lipflow", "dest":"engine/lipflow", "skip":["__pycache__"]},
         {"type":"dir", "path":"../../espnet", "dest":"engine/espnet", "skip":["__pycache__"]},

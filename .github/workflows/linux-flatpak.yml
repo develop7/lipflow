@@ -56,36 +56,53 @@ jobs:
             --state-dir="$RUNNER_TEMP/lipflow-state" \
             --repo="$RUNNER_TEMP/lipflow-repo" \
             "$RUNNER_TEMP/lipflow-build" linux/flatpak/io.github.develop7.Lipflow.json
-          # The exported repository is sufficient for bundling; free the duplicate files.
+          # Exported repository contains the app and pinned extra-data metadata.
           rm -rf "$RUNNER_TEMP/lipflow-state" "$RUNNER_TEMP/lipflow-build"
 
-      - name: Bundle and checksum
+      - name: Archive repository and checksum
         run: |
           mkdir -p "$RUNNER_TEMP/lipflow-dist"
-          flatpak build-bundle --arch=x86_64 \
-            --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
-            "$RUNNER_TEMP/lipflow-repo" "$RUNNER_TEMP/lipflow-dist/Lipflow.flatpak" \
-            io.github.develop7.Lipflow
+          tar -C "$RUNNER_TEMP" -czf "$RUNNER_TEMP/lipflow-dist/Lipflow-repo.tar.gz" lipflow-repo
           rm -rf "$RUNNER_TEMP/lipflow-repo"
           cd "$RUNNER_TEMP/lipflow-dist"
-          sha256sum Lipflow.flatpak > Lipflow.flatpak.sha256
-          sha256sum -c Lipflow.flatpak.sha256
+          sha256sum Lipflow-repo.tar.gz > Lipflow-repo.tar.gz.sha256
+          sha256sum -c Lipflow-repo.tar.gz.sha256
 
-      - name: Install bundle and smoke-test the packaged application
+      - name: Install archived repository and smoke-test the packaged application
         run: |
-          flatpak install --user --noninteractive "$RUNNER_TEMP/lipflow-dist/Lipflow.flatpak"
+          tar -C "$RUNNER_TEMP/lipflow-dist" -xzf "$RUNNER_TEMP/lipflow-dist/Lipflow-repo.tar.gz"
+          flatpak remote-add --user --no-gpg-verify lipflow "file://$RUNNER_TEMP/lipflow-dist/lipflow-repo"
+          flatpak install --user --arch=x86_64 --noninteractive lipflow io.github.develop7.Lipflow
+          flatpak run --user --command=python3.12 io.github.develop7.Lipflow -c '
+          import ctypes, pathlib, subprocess, sys, torch
+          extra = pathlib.Path("/app/extra/lib/python3.12/site-packages")
+          assert pathlib.Path(torch.__file__).resolve().is_relative_to(extra), torch.__file__
+          subprocess.run([sys.executable, "-m", "pip", "check"], check=True)
+          assert torch.version.cuda, f"expected CUDA-built torch, got {torch.__version__}"
+          assert not torch.cuda.is_available(), "CI probe expects CPU fallback without an attached GPU"
+          sample = torch.tensor([2.0, 3.0], device="cpu")
+          assert torch.dot(sample, sample).item() == 13.0, "CPU tensor execution failed"
+          runtime = ctypes.CDLL(str(extra / "nvidia/cu13/lib/libcudart.so.13"))
+          nvrtc = ctypes.CDLL(str(extra / "nvidia/cu13/lib/libnvrtc.so.13"))
+          version = ctypes.c_int()
+          assert runtime.cudaRuntimeGetVersion(ctypes.byref(version)) == 0
+          major, minor = ctypes.c_int(), ctypes.c_int()
+          assert nvrtc.nvrtcVersion(ctypes.byref(major), ctypes.byref(minor)) == 0
+          assert version.value >= 13000 and major.value == 13
+          print(f"torch {torch.__version__} (CUDA {torch.version.cuda}) loaded from {torch.__file__}; runtime {version.value}, NVRTC {major.value}.{minor.value}; CPU tensor execution passed")
+          '
           timeout 120s dbus-run-session -- flatpak run --user io.github.develop7.Lipflow doctor
           timeout 120s dbus-run-session -- xvfb-run -a \
             flatpak run --user --socket=x11 --env=GTK_A11Y=none \
             io.github.develop7.Lipflow run --smoke-test
 
-      - name: Upload installable bundle
+      - name: Upload installable repository
         uses: actions/upload-artifact@v4
         with:
           name: Lipflow-linux-x86_64-cuda
           path: |
-            ${{ runner.temp }}/lipflow-dist/Lipflow.flatpak
-            ${{ runner.temp }}/lipflow-dist/Lipflow.flatpak.sha256
+            ${{ runner.temp }}/lipflow-dist/Lipflow-repo.tar.gz
+            ${{ runner.temp }}/lipflow-dist/Lipflow-repo.tar.gz.sha256
           compression-level: 0
           retention-days: 7
           if-no-files-found: error

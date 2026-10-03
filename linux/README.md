@@ -6,34 +6,42 @@ cleanup, vocabulary, practice, history, and training implementations without cha
 
 ## Flatpak
 
-GitHub Actions builds the CUDA-enabled x86_64 bundle on relevant pushes and pull requests.
+GitHub Actions builds an x86_64 Flatpak repository on relevant pushes and pull requests.
 You can also start it from **Actions → Linux Flatpak → Run workflow**. After a successful run,
 download the **Lipflow-linux-x86_64-cuda** artifact and extract its ZIP. Artifacts are retained
 for seven days. From the extracted directory:
 
 ```sh
-sha256sum -c Lipflow.flatpak.sha256
-flatpak install --user Lipflow.flatpak
+sha256sum -c Lipflow-repo.tar.gz.sha256
+tar -xzf Lipflow-repo.tar.gz
+flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak remote-add --user --no-gpg-verify lipflow "file://$(pwd)/lipflow-repo"
+flatpak install --user lipflow io.github.develop7.Lipflow
 flatpak run io.github.develop7.Lipflow
 ```
 
-The [workflow](../.github/workflows/linux-flatpak.yml) builds from the pinned manifest,
-installs the exported bundle, checks the embedded Python engine with `doctor`, and opens
-the GTK window under a virtual display. NVIDIA acceleration and desktop portal consent
-still need testing on a real GNOME session. CI does not download speech models.
+**Installation requires internet access.** Flatpak downloads about 3.0 GB (2.8 GiB) of pinned
+PyTorch, Triton, NVIDIA CUDA 13, and CUDA-support wheels from PyPI at install time. These are
+mandatory payloads of this one application, not an optional add-on. Flatpak checks each
+download's SHA-256 and byte length, then runs the offline `apply_extra` installer inside its
+sandbox. The wheels are installed under `/app/extra` and their downloaded archives are removed.
+Installed libraries still require several GB, plus GNOME/NVIDIA runtimes and speech models.
 
-To install the generated portable bundle, use:
+The repository archive excludes those GPU wheels. A single `.flatpak` bundle cannot fetch
+extra-data during installation, so distribution uses a repository archive instead. The
+adjacent checksum verifies that archive; Flatpak separately verifies the external wheels.
+`--no-gpg-verify` is for this locally extracted repository: verify its published checksum
+and trust its source before adding it. The GNOME runtime comes from Flathub.
 
-```sh
-flatpak install --user linux/flatpak/Lipflow.flatpak
-flatpak run io.github.develop7.Lipflow
-```
+Keep the extracted repository for updates. Replace its contents with a newly verified archive,
+then run `flatpak update --user io.github.develop7.Lipflow`. If you move the directory, change
+the remote URL with `flatpak remote-modify --user --url="file://$(pwd)/lipflow-repo" lipflow`.
 
-The bundle points to Flathub for the GNOME runtime. The adjacent
-`Lipflow.flatpak.sha256` records its checksum.
-
-The verified x86_64 bundle is about 2.8 GiB. The installed application uses about 6.9 GB,
-plus the shared GNOME/NVIDIA runtimes and downloaded speech models.
+The [workflow](../.github/workflows/linux-flatpak.yml) builds from the pinned manifest, archives
+the exported repository, installs from the extracted artifact, checks imports from `/app/extra`
+and CUDA library loading, runs `doctor`, and opens the GTK window under a virtual display.
+CI verifies CPU fallback without a GPU; NVIDIA acceleration and desktop portal consent still
+need testing on a real GNOME session. CI does not download speech models.
 
 Install Flatpak, flatpak-builder, and elfutils with your distribution's package manager.
 Flatpak Builder uses elfutils (`eu-strip` and `eu-elfcompress`) to process debug symbols.
@@ -42,26 +50,28 @@ Build from the repository root:
 
 ```sh
 flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-flatpak-builder --user --install-deps-from=flathub --force-clean --install \
-  linux/flatpak/build linux/flatpak/io.github.develop7.Lipflow.json
+flatpak-builder --user --install-deps-from=flathub --force-clean \
+  --repo=linux/flatpak/lipflow-repo linux/flatpak/build linux/flatpak/io.github.develop7.Lipflow.json
+flatpak remote-add --user --no-gpg-verify lipflow "file://$(pwd)/linux/flatpak/lipflow-repo"
+flatpak install --user lipflow io.github.develop7.Lipflow
 flatpak run io.github.develop7.Lipflow
 ```
 
 The manifest selects GNOME Platform/SDK 50 and the Rust SDK extension. It bundles Python
-3.12.14, PortAudio, the unchanged ML engine, and pinned Python 3.12 Linux wheels, including
-PyTorch's CUDA 13 dependencies and safetensors for whisper mode. Downloads are checked against
-SHA-256 hashes, and compilation and wheel installation run offline. Allow several GB for the
-installed application and considerably more for the SDK, dependency cache, and build output.
+3.12.14, PortAudio, the unchanged ML engine, and ordinary pinned Python 3.12 Linux wheels,
+including safetensors for whisper mode. The GPU wheels are declared as Flatpak `extra-data`
+sources, not downloaded or embedded during the build. Compilation and both build-time and
+install-time wheel installation are offline; only Flatpak's source fetching needs network access.
+Allow several GB for the installed application and more for the SDK, cache, and build output.
 
-To produce a portable bundle after building:
+To archive the repository after building:
 
 ```sh
-flatpak-builder --user --repo=linux/flatpak/repo --force-clean \
-  linux/flatpak/build linux/flatpak/io.github.develop7.Lipflow.json
-flatpak build-bundle --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
-  linux/flatpak/repo linux/flatpak/Lipflow.flatpak io.github.develop7.Lipflow
-flatpak install --user linux/flatpak/Lipflow.flatpak
+tar -C linux/flatpak -czf linux/flatpak/Lipflow-repo.tar.gz lipflow-repo
+(cd linux/flatpak && sha256sum Lipflow-repo.tar.gz > Lipflow-repo.tar.gz.sha256)
 ```
+
+Install the archive using the extraction and local-remote commands above.
 
 No speech model weights are redistributed in the package: the LRS3 weights are restricted to
 non-commercial research use. **Dictate → Download models and load** fetches the original
@@ -71,14 +81,14 @@ use HTTPS, validate lengths and JSON, and publish completed files atomically.
 ### NVIDIA RTX 3080
 
 The shared engine selects CUDA when available and otherwise uses CPU. The RTX 3080's Ampere
-architecture is supported by the bundled CUDA build. Keep your Flatpak runtimes updated so
+architecture is supported by the install-time CUDA build. Keep your Flatpak runtimes updated so
 Flatpak can install the NVIDIA GL extension matching the host driver (595.104 in the requested
 configuration). You do not need to install CUDA inside the host OS for the packaged wheels.
 
 Flatpak shares the NVIDIA driver through its `org.freedesktop.Platform.GL.nvidia` extension.
-Flathub's current runtime catalogue has no shared CUDA 13 runtime for this PyTorch build, so
-the application's pinned CUDA, cuBLAS, and cuDNN libraries are bundled separately from the
-shared driver.
+The application's pinned CUDA runtime, cuBLAS, and cuDNN libraries are fetched through
+`extra-data` from NVIDIA's Python wheels, separately from that shared driver. Neither a host
+CUDA toolkit nor a separate Lipflow GPU extension is required.
 
 ```sh
 flatpak update
