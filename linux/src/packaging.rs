@@ -40,11 +40,15 @@ struct CargoPackage {
 }
 
 fn compatible(filename: &str) -> bool {
-    let parts: Vec<_> = filename.trim_end_matches(".whl").rsplitn(4, '-').collect();
-    if parts.len() != 4 || !filename.ends_with(".whl") {
+    let Some(filename) = filename.strip_suffix(".whl") else {
         return false;
-    }
-    let (platform, abi, python) = (parts[0], parts[1], parts[2]);
+    };
+    let mut parts = filename.rsplitn(4, '-');
+    let (Some(platform), Some(abi), Some(python), Some(_)) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return false;
+    };
     let platform_ok = platform == "any"
         || platform
             .split('.')
