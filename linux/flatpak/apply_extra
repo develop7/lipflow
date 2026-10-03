@@ -1,0 +1,22 @@
+#!/bin/sh
+set -eu
+
+# Flatpak stages the verified wheels here and permits writes only in this tree.
+cd /app/extra
+export TMPDIR=/app/extra
+export PYTHONDONTWRITEBYTECODE=1
+
+# A prefix install merges namespace packages (nvidia/cuda); sequential --target
+# installs would skip an existing namespace directory. Remove archives as we go.
+for wheel in *.whl; do
+    if [ ! -f "$wheel" ]; then
+        printf 'No extra-data wheels found in /app/extra\n' >&2
+        exit 1
+    fi
+    /app/bin/python3.12 -m pip install --prefix=/app/extra --ignore-installed \
+        --no-index --no-deps --no-compile --no-cache-dir "$wheel"
+    rm "$wheel"
+done
+
+# The build-time .pth file exposes this tree to the bundled Python interpreter.
+/app/bin/python3.12 -m pip check

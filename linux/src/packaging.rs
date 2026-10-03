@@ -19,6 +19,7 @@ struct Package {
 struct Wheel {
     url: String,
     hash: String,
+    size: u64,
 }
 #[derive(Deserialize)]
 struct Installed {
@@ -39,11 +40,15 @@ struct CargoPackage {
 }
 
 fn compatible(filename: &str) -> bool {
-    let parts: Vec<_> = filename.trim_end_matches(".whl").rsplitn(4, '-').collect();
-    if parts.len() != 4 || !filename.ends_with(".whl") {
+    let Some(filename) = filename.strip_suffix(".whl") else {
         return false;
-    }
-    let (platform, abi, python) = (parts[0], parts[1], parts[2]);
+    };
+    let mut parts = filename.rsplitn(4, '-');
+    let (Some(platform), Some(abi), Some(python), Some(_)) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return false;
+    };
     let platform_ok = platform == "any"
         || platform
             .split('.')
@@ -58,6 +63,11 @@ fn compatible(filename: &str) -> bool {
                     .is_some_and(|n| (37..=312).contains(&n)))
     });
     platform_ok && python_ok && ["none", "abi3", "cp312"].contains(&abi)
+}
+// Defer the GPU-enabled PyTorch stack and its NVIDIA/CUDA support packages as
+// one install-time payload; ordinary Python dependencies stay in the build.
+fn deferred(name: &str) -> bool {
+    name == "torch" || name == "triton" || name.starts_with("nvidia-") || name.starts_with("cuda-")
 }
 
 pub fn generate(root: &Path) -> Result<()> {
@@ -94,7 +104,6 @@ pub fn generate(root: &Path) -> Result<()> {
     .collect();
     let client = crate::models::client()?;
     let mut sources = Vec::new();
-    let mut requirements = Vec::new();
     for package in installed
         .iter()
         .filter(|p| !excluded.contains(p.name.as_str()))
@@ -109,7 +118,7 @@ pub fn generate(root: &Path) -> Result<()> {
                     package.name, package.version
                 )
             })?;
-        let (url, hash) = if let Some(wheel) = pinned
+        let (url, hash, size) = if let Some(wheel) = pinned
             .wheels
             .iter()
             .find(|w| compatible(w.url.rsplit('/').next().unwrap_or("")))
@@ -117,6 +126,7 @@ pub fn generate(root: &Path) -> Result<()> {
             (
                 wheel.url.clone(),
                 wheel.hash.trim_start_matches("sha256:").to_owned(),
+                wheel.size,
             )
         } else if package.name == "safetensors" {
             // uv.lock only contains macOS wheels for this conditional dependency.
@@ -144,6 +154,7 @@ pub fn generate(root: &Path) -> Result<()> {
                     .as_str()
                     .context("Missing wheel digest")?
                     .to_owned(),
+                wheel["size"].as_u64().context("Missing wheel size")?,
             )
         } else {
             bail!(
@@ -159,13 +170,23 @@ pub fn generate(root: &Path) -> Result<()> {
             "Invalid source metadata"
         );
         let filename = url.rsplit('/').next().unwrap();
-        sources.push(json!({"type":"file", "url":url, "sha256":hash, "dest":"wheels", "dest-filename":filename}));
-        requirements.push(format!("{}=={}", package.name, package.version));
+        if deferred(&package.name) {
+            anyhow::ensure!(size > 0, "Wheel source has an empty size: {url}");
+            sources.push(json!({
+                "type": "extra-data",
+                "url": url,
+                "sha256": hash,
+                "size": size,
+                "filename": filename
+            }));
+        } else {
+            sources.push(json!({"type":"file", "url":url, "sha256":hash, "dest":"wheels", "dest-filename":filename}));
+        }
     }
+    let source_count = sources.len();
     let flatpak = root.join("linux/flatpak");
     let module = json!({"name":"python-ml-dependencies", "buildsystem":"simple", "build-options":{"no-debuginfo":true}, "build-commands":[
-        "for wheel in wheels/*.whl; do /app/bin/python3.12 -m pip install --no-index --no-deps --no-compile \"$wheel\" || exit; rm \"$wheel\"; done",
-        "/app/bin/python3.12 -m pip check"
+        "for wheel in wheels/*.whl; do /app/bin/python3.12 -m pip install --no-index --no-deps --no-compile \"$wheel\" || exit; rm \"$wheel\"; done"
     ], "sources":sources});
     std::fs::write(
         flatpak.join("python-deps.json"),
@@ -191,7 +212,7 @@ pub fn generate(root: &Path) -> Result<()> {
     )?;
     println!(
         "Generated {} hashed wheel sources and Cargo.lock archive sources in {}",
-        requirements.len(),
+        source_count,
         flatpak.display()
     );
     Ok(())
@@ -200,6 +221,15 @@ pub fn generate(root: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn gpu_distribution_classifier_defers_only_requested_names() {
+        for name in ["torch", "triton", "nvidia-cublas-cu13", "cuda-bindings"] {
+            assert!(deferred(name), "{name} should use extra-data");
+        }
+        for name in ["torchvision", "torchaudio", "numpy", "nvidia", "cuda"] {
+            assert!(!deferred(name), "{name} should remain build-time");
+        }
+    }
     #[test]
     fn wheel_selection_rejects_other_interpreters_and_architectures() {
         assert!(compatible(
